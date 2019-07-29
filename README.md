@@ -1,4 +1,4 @@
-# GOST-R-34.12-2015
+# GOST R 34.12-2015 on C++
 
 Kuznyechik (Russian: Кузнечик, literally "grasshopper") is a symmetric block cipher. 
 It has a block size of 128 bits and key length of 256 bits. 
