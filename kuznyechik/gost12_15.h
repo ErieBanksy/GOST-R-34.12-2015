@@ -55,6 +55,11 @@ private:
     vector<uint8_t> dataXor(vector<uint8_t> data1, vector<uint8_t> data2);
     uint8_t galoisMult(uint8_t polynom1, uint8_t polynom2);
 
+    unsigned longAddition(unsigned char* a, unsigned sizeA,
+            unsigned char* b, unsigned sizeB,
+            unsigned char** sum);
+    std::vector<uint8_t> longAddition(std::vector<uint8_t> a, std::vector<uint8_t> b);
+
     uint8_t generatingPolynom = 0xc3; //Полином x ^ 8 + x ^ 7 + x ^ 6 + x + 1
 
     int blockSize = 16;
