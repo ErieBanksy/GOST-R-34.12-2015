@@ -1,3 +1,5 @@
+#include <cstring>
+
 #include "gost12_15.h"
 
 
@@ -471,6 +473,75 @@ vector<uint8_t> gost12_15::inverseData(vector<uint8_t> data) {
     return invData;
 }
 
+/**
+ * \brief Складывает два длинных числа друг с другом. Порядок хранения байт: младший разряд в конце.
+ * \details Числа должны быть записаны в памяти. А память под результат выделяется внутри функции.
+ * \details Функция взята откуда-то с просторов интернета, но проверена на корректность.
+ * \details ToDo: Не очень хорошо выделять память в одной области видимости, а очищать в другой. Эту функцию стоит обдумать и переработать.
+ * \details ToDo: Поменять Си-шные инструменты для работы с памятью на C++-ные.
+ * \param [in] a Указатель на область памяти, в которой хранится первое слагаемое.
+ * \param [in] sizeA Длина в байтах первого слагаемого.
+ * \param [in] b Указатель на область памяти, в которой хранится второе слагаемое.
+ * \param [in] sizeB Длина в байтах второго слагаемого.
+ * \param [out] sum Указатель на указатель на область памяти, в которой сохранён результат.
+ * \return Длина результата.
+ */
+unsigned gost12_15::longAddition(unsigned char* a, unsigned sizeA,
+                      unsigned char* b, unsigned sizeB,
+                      unsigned char** sum)
+{
+    unsigned lengthResult;
+    if (sizeA > sizeB)
+        lengthResult = sizeA + 1;
+    else
+        lengthResult = sizeB + 1;
+
+    const auto tmpSum = static_cast<unsigned char*>(calloc(lengthResult, 1));
+    const auto shiftA = static_cast<unsigned char*>(calloc(lengthResult, 1));
+    memcpy(shiftA + lengthResult - sizeA, a, sizeA);
+    const auto shiftB = static_cast<unsigned char*>(calloc(lengthResult, 1));
+    memcpy(shiftB + lengthResult - sizeB, b, sizeB);
+
+    for (unsigned i = lengthResult - 1; i >= 1; --i)
+    {
+        const unsigned short tmpAddition = static_cast<unsigned short>(shiftA[i]) +
+                                           static_cast<unsigned short>(shiftB[i]) +
+                                           static_cast<unsigned short>(tmpSum[i]); // суммируем последние разряды чисел и перенесённый разряд из предыдущего сложения
+        tmpSum[i] = tmpAddition % 256; // если есть разряд для переноса он отсекается
+        tmpSum[i - 1] += (tmpAddition / 256); // если есть разряд для переноса, переносим его в следующее сложение
+    }
+
+    if (tmpSum[0] == 0)
+    {
+        --lengthResult;
+        *sum = static_cast<unsigned char*>(calloc(lengthResult, 1));
+        memcpy(*sum, tmpSum + 1, lengthResult);
+    }
+    else
+    {
+        *sum = static_cast<unsigned char*>(calloc(lengthResult, 1));
+        memcpy(*sum, tmpSum, lengthResult);
+    }
+    free(tmpSum);
+    free(shiftA);
+    free(shiftB);
+    return lengthResult;
+}
+
+/**
+ * \brief С++-style интерфейс для функции сложения длинных чисел. Порядок хранения байт: младший разряд в конце.
+ * @param a Первое слагаемое.
+ * @param b Второе слагаемое.
+ * @return Сумма.
+ */
+std::vector<uint8_t> gost12_15::longAddition(std::vector<uint8_t> a, std::vector<uint8_t> b)
+{
+    unsigned char* sum;
+    auto length = longAddition(a.data(), a.size(), b.data(), b.size(), &sum);
+    std::vector<uint8_t> result(sum, sum + length);
+    free(sum);
+    return result;
+}
 
 /**
 * \brief Функция режима гаммирования.
@@ -497,13 +568,17 @@ vector<uint8_t> gost12_15::gammaCryption(vector<uint8_t> data, vector<uint8_t> s
     vector<uint8_t> encSync;
     vector<uint8_t> encData(blockCount*blockSize, 0);
     for (int i = 0; i < blockCount; i++) {
-        gammaSync[blockSize - 1] = static_cast<uint8_t>(i + 1);
         encSync = gammaSync;
 
         encSync = LSXEncryptData(encSync, roundKeys);
 
         for (int j = 0; j < blockSize; j++) {
             encData[blockSize*i + j] = data[blockSize*i + j] ^ encSync[j];
+        }
+
+        gammaSync = longAddition(gammaSync, {0x01});
+        if(gammaSync.size() > blockSize) { // Если сложение увеличило длину, то обрезаем.
+            gammaSync.erase(gammaSync.begin());
         }
     }
 
